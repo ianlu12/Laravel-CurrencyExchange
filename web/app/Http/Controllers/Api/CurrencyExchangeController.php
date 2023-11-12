@@ -4,76 +4,48 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CurrencyExchangeRequest;
-use App\Services\CurrencyExchangeService;
-use Illuminate\Http\Request;
-use App\Library\Currency\CurrencyFatory;
+use App\Services\CurrencyService;
 use Exception;
-use Mockery\Expectation;
+use Illuminate\Http\Response;
 
 class CurrencyExchangeController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
+    private $currencyService;
+
+
+    public function __construct(CurrencyService $currencyService)
     {
-        //
+        $this->currencyService = $currencyService;
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
-    {
-        //
-    }
-
-    /**
-     * Display the specified resource.
-     */
-    public function show(string $id)
-    {
-        //
-    }
-
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, string $id)
-    {
-        //
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(string $id)
-    {
-        //
-    }
     public function exchange(CurrencyExchangeRequest $request)
     {
-        $validateData = $request->validated();
-        
-        $amount = str_replace(',','',$validateData['amount']); // 去除逗點
-
-        $source = $validateData['source'];
-        $target = $validateData['target'];
-
         try {
-            $service = new CurrencyExchangeService((CurrencyFatory::getCurrencyRate($source)));
-            $outputAmount = $service->setAmount($amount)
-                ->handleAmountDecimal()
-                ->exchange($target);
+            // 檢查輸入
+            $amount = $this->currencyService->validateAmount($request->amount);
+            // 處理輸入(去除逗點)
+            $amount = $this->currencyService->handleAmountInput($amount); 
+            // 取匯率資料
+            $query = $this->currencyService->getRateData($request->source);
+            // 取指定國家匯率
+            $rate = $this->currencyService->getRate($query, $request->target);
+            // 換算
+            $exchangedAmount = $this->currencyService->exchange($amount, $rate);
+            // 格式化金額
+            $outputAmount = $this->currencyService->formatAmount($exchangedAmount);
         } catch (Exception $ex) {
+
             return response()->json([
                 'msg' => $ex->getMessage(),
             ]);
         }
 
-        return response()->json([
+        // 輸出的資料
+        $responseArray = [
             'msg' => 'success',
-            'amount' => number_format($outputAmount, 2) // 四捨五入到小數點二位,千芬位逗點
-        ]);
+            'amount' => $outputAmount
+        ];
+
+        return response()->json($responseArray, Response::HTTP_OK);
     }
 }
